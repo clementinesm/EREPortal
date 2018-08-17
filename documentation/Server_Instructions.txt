@@ -1,0 +1,247 @@
+########################################
+# Secure the Server
+########################################
+
+# Rebuild
+# Boot
+# Log in as root
+
+# update the machine
+apt-get update
+# or try apt-get -o Acquire::ForceIPv4=true update if this crashes because of IPv6
+apt-get upgrade
+apt-get install fail2ban
+vi /etc/ssh/sshd_config
+    PermitRootLogin no
+    PasswordAuthentication no
+    UsePAM no
+apt-get install git-core
+apt-get install virtualenv
+
+########################################
+# Setting up the user
+########################################/
+
+# create the new deployers group
+/usr/sbin/groupadd deployers
+# back up the sudoers file
+cp /etc/sudoers /etc/sudoers-backup
+# modify the sudo list so the deployers group has sudo privileges
+(cat /etc/sudoers-backup ; echo "%deployers ALL=(ALL) ALL") > /etc/sudoers
+# ensure the appropriate permissions are on the sudoers file
+chmod 0440 /etc/sudoers
+
+# create the new user. be sure to use your own name here
+/usr/sbin/useradd -c "Jonathan Bennett" -m -g deployers deployer1
+# set up a password for the new user. you'll need the password to run sudo commands
+/usr/bin/passwd deployer1
+
+# add the deployer user to the deployers group
+/usr/sbin/usermod -a -G deployers deployer1
+# create a directory for the deployer's public key and authorized_keys file
+mkdir /home/deployer1/.ssh
+# create the authorized_keys file
+vi /home/deployer1/.ssh/authorized_keys
+
+# change the owner and group of the .ssh directory to deployer
+# and deployers, respectively
+chown -R deployer1 /home/deployer1/.ssh
+chgrp -R deployers /home/deployer1/.ssh
+
+# restart SSH Service
+service ssh reload
+
+# before logging out as root,  check to make sure you can log in as deployer
+# if not, try chown -R deployer /home/deployer/.ssh/authorized_keys
+
+# from now on, log in as deployer1
+
+# create a deploy key
+mkdir ~/deploy_key
+cd ~/deploy_key
+# this is the same command we performed in the second
+# chapter, but we're using it to create a deploy key now
+# -t specifies the algorithm, -b argument specifies the
+# number of bits to use
+ssh-keygen -t rsa -b 2048
+
+# save the private key in our current directory ./deploy_key
+# Press enter twice when prompted for a passphrase. We will not use a passphrase on the deploy key.
+
+# add the deploy key to github
+
+# clone the code to the server
+
+########################################
+# Source Control
+########################################
+
+# make sure the deploy key is set up at github
+cd /home/deployer1
+ssh-agent bash -c 'ssh-add /home/deployer1/deploy_key/deploy_key; git clone git@github.com:jonolsu/BDESDash.git'
+
+
+
+########################################
+# Create the Environment
+########################################
+
+
+mkdir /home/deployer1/envs/
+# determine which version of python3 is installed and name the environment appropriately
+python3 --version
+virtualenv -p python3 /home/deployer1/envs/bokehdash352
+source /home/deployer1/envs/bokehdash352/bin/activate
+
+cd /home/deployer1/BDESDash
+pip install -r requirements.txt
+
+#get bokeh sample data not included with bokeh library
+bokeh sampledata
+
+
+########################################
+# Setting up the Web Server
+# https://www.digitalocean.com/community/tutorials/how-to-set-up-django-with-postgres-nginx-and-gunicorn-on-ubuntu-16-04
+########################################
+
+# set up the firewall
+sudo ufw allow 22
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw allow 5006 #delete this later
+sudo ufw enable
+
+sudo apt-get install gunicorn
+sudo apt-get install nginx
+sudo apt-get install supervisor # do I need this?
+
+# create gunicorn.service file
+sudo vi /etc/systemd/system/gunicorn.service
+
+#  start the Gunicorn service we created and enable it so that it starts at boot:
+sudo systemctl start gunicorn
+sudo systemctl enable gunicorn
+
+# Configure Nginx to Proxy Pass to Gunicorn
+sudo vi /etc/nginx/sites-available/mysite
+
+# enable the file
+sudo ln -s /etc/nginx/sites-available/mysite /etc/nginx/sites-enabled
+
+#
+sudo ufw allow 'Nginx Full'
+
+# restart Nginx
+sudo systemctl restart nginx
+
+
+########################################
+# Configuring the Bokeh Server
+########################################
+
+# create bokehserver.service file
+sudo vi /etc/systemd/system/bokehserver.service
+
+#  start the bokehserver service we created and enable it so that it starts at boot:
+sudo systemctl start bokehserver
+sudo systemctl enable bokehserver
+
+
+
+########################################
+# Setting up the connection to MSSQL
+# https://github.com/mkleehammer/pyodbc/wiki/Install
+########################################
+
+source /home/deployer1/envs/bokehdash352/bin/activate
+sudo apt install python3-pip  # or `sudo apt install python-pip` for Python 2.x
+sudo apt install unixodbc-dev
+pip3 install pyodbc  # or `sudo pip install pyodbc` for Python 2.x
+
+# Not sure about this
+#https://stackoverflow.com/questions/38534154/linux-python3-cant-open-lib-sql-server
+sudo su
+wget https://gallery.technet.microsoft.com/ODBC-Driver-13-for-Ubuntu-b87369f0/file/154097/2/installodbc.sh
+sh installodbc.sh
+exit
+
+# But this works -- just not sure if the middle section made it work
+#https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server
+sudo su
+curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+curl https://packages.microsoft.com/config/ubuntu/16.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
+exit
+sudo apt-get update
+sudo ACCEPT_EULA=Y apt-get install msodbcsql
+# optional: for bcp and sqlcmd
+sudo ACCEPT_EULA=Y apt-get install mssql-tools
+echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bash_profile
+echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+source ~/.bashrc
+# optional: for unixODBC development headers
+sudo apt-get install unixodbc-dev
+
+
+########################################
+# Setting up cron job for nightly data migration
+########################################
+cd /home/deployer1/BDESDash
+chmod +x loaddata.sh
+sudo cp ./loaddata.sh /etc/cron.daily/
+crontab -e
+# add the following line to the cron file for a daily 4:05 AM execution
+5 9 * * * /etc/cron.daily/loaddata.sh >> /home/deployer1/BDESDash/loaddata.log 2>&1
+#9:05 UTC, redirect output to a file called loaddadta.log, along with stderr output
+
+
+
+########################################
+# Adding SSL Certification
+########################################
+
+# add the certificate here
+sudo vi /etc/nginx/ssl/nginx.crt;
+# add the private key here
+sudo vi /etc/nginx/ssl/nginx.key;
+
+########################################
+# Making updates
+########################################
+
+# if you update your Django Application
+cd /home/deployer1/BDESDash
+ssh-agent bash -c 'ssh-add /home/deployer1/deploy_key/deploy_key; git pull origin master'
+chmod +x loaddata.sh
+sudo systemctl restart gunicorn
+
+# if you change gunicorn service
+sudo systemctl daemon-reload
+sudo systemctl restart gunicorn
+
+# if you change bokehserver service
+sudo systemctl daemon-reload
+sudo systemctl restart bokehserver
+
+# if you change nginx
+sudo nginx -t && sudo systemctl restart nginx
+
+
+########################################
+# Notes
+########################################
+
+# to install/use a task manager
+sudo apt-get install htop
+htop
+
+# to initiate a data download manually
+#/bin/bash
+#source /home/deployer1/envs/bokehdash352/bin/activate
+#cd /home/deployer1/BDESDash
+#python daily_build_table.py
+
+/bin/bash
+cd /home/deployer1/BDESDash
+./loaddata.sh
+

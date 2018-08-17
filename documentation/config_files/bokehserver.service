@@ -1,0 +1,13 @@
+[Unit]
+Description=Bokeh Server
+After=network.target
+
+[Service]
+Environment="BOKEH_SECRET_KEY=kitjOI83DgklnTuUykyHYABBCaV8oItJTZTQqVBav97G"
+User=deployer1
+Group=www-data
+WorkingDirectory=/home/deployer1/BDESDash/dashboard/BokehApps
+ExecStart=/home/deployer1/envs/bokehdash352/bin/bokeh serve hourly_gen.py hourly_cash.py monthly_cash.py waterfall.py revenuerank.py solarrank.py --allow-websocket-origin solar.bigdataenergy.com --address 127.0.0.1 --session-ids external-signed
+
+[Install]
+WantedBy=multi-user.target

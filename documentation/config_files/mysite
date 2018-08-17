@@ -1,0 +1,56 @@
+server {
+    listen 80;
+    server_name solar.bigdataenergy.com;
+
+    access_log /var/log/mysite.access.log;
+    error_log /var/log/mysite.error.log debug;
+
+    location /static/ {
+        alias /home/deployer1/BDESDash/static/;
+    }
+
+    # Intercept bokehproxy urls to send to bokeh process
+    location /bokehproxy/ {
+        proxy_pass http://127.0.0.1:5006/;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_http_version 1.1;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host:$server_port;
+        proxy_buffering off;
+    }
+
+
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:/home/deployer1/BDESDash/mysite/mysite.sock;
+    }
+
+    # listen 443 ssl; # managed by Certbot
+    # ssl_certificate /etc/letsencrypt/live/solar.bigdataenergy.com/fullchain.pem; # managed by Certbot
+    # ssl_certificate_key /etc/letsencrypt/live/solar.bigdataenergy.com/privkey.pem; # managed by Certbot
+    # include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+    listen 443;
+    ssl on;
+    ssl_certificate /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';
+
+
+
+    if ($scheme != "https") {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+}
+
+server {
+    server_name 52.55.228.166;
+    return 301 $scheme://solar.bigdataenergy.com$request_uri;
+
+}
