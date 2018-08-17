@@ -1,0 +1,18 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block content %}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" id="file" name="file">
+    <button type="submit">Upload</button>
+  </form>
+
+  {% if upload_message %}
+      <br>
+      <p><strong>{{ upload_message }}</strong></p>
+      <br>
+  {% endif %}
+
+  <p><a href="{% url 'home' %}">Return to home</a></p>
+{% endblock %}

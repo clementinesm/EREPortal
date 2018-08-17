@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <script
+            src="https://code.jquery.com/jquery-3.2.1.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
+        <title>{% block title %}{{application_company}}{% endblock %}</title>
+    </head>
+
+    <body>
+        <div>
+            <a href="{% url 'logout' %}">Log Out</a>
+            &nbsp
+
+            {%  if user.is_superuser %}
+                <a href="{% url 'admin:index' %}">Administration</a>
+            {% endif %}
+
+            <br>
+            {%  for g in graphs %}
+                <a href="{% url g.0 %}">{{ g.1 }}</a>
+                &nbsp
+            {%  endfor %}
+
+            <br>
+
+        </div>
+
+        <header>
+            <h1>{{application_name}} Version {{version_number}}</h1>
+        </header>
+        <main>
+            {% include 'session_security/all.html' %}
+            {% block content %}
+            {% endblock %}
+
+        </main>
+    </body>
+</html>
