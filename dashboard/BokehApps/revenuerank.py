@@ -35,16 +35,26 @@ def update():
 
     esiid = esiid_textbox.value.lower()
 
+    exclude = exclude_approval_textbox.value.lower()
+
     # Filter on TDSP
     selected_TDSPs = [tdsps[x] for x in tdsp_group.active]
 
     # Filter on ESIID
     noesiid = (esiid == 'none') | (esiid == '')
-    if noesiid:
+    noexclude = (exclude == 'none') | (exclude == '')
+    if noesiid or noexclude:
+        querygen = queries.query_transactions(flowdates=[str(filterYear) + '-' + str(filterMonth).rjust(2,'0') + '-01'],
+                                  TDSP=selected_TDSPs)
+    elif noexclude and not noesiid:
+        querygen = queries.query_transactions(flowdates=[str(filterYear) + '-' + str(filterMonth).rjust(2,'0') + '-01'],
+                                  TDSP=selected_TDSPs,
+                                  ESIID = [esiid])
+    elif noesiid and not noexclude:
         querygen = queries.query_transactions(flowdates=[str(filterYear) + '-' + str(filterMonth).rjust(2,'0') + '-01'],
                                   TDSP=selected_TDSPs)
     else:
-        querygen = queries.query_transactions(flowdates=[str(filterYear) + '-' + str(filterMonth).rjust(2,'0') + '-01'],
+        querygen = query.query_transactions(flowdates = [str(filterYear) + '-' + str(filterMonth).rjust(2,'0') + '-01'],
                                   TDSP=selected_TDSPs,
                                   ESIID = [esiid])
     df = queries.data_query(querygen)
@@ -74,8 +84,13 @@ year_slider = Slider(title='year', value=finalYear, start=firstYear, end=finalYe
 tdsp_group = CheckboxGroup(labels=tdsps,
                            active=list(range(len(tdsps))))
 
+exclude_approval_textbox = TextInput(title='Exclude' value='None')
+
 savebutton = Button(label="Download", button_type="success")
 savebutton.callback = CustomJS(args=dict(source=source_dl), code=open(os.path.join(os.path.dirname(__file__), "dl_820transactions.js")).read())
+
+#updatebutton = Button(label="Approve", button_type="")
+#updatebutton.callback =
 
 
 columns = [
@@ -103,7 +118,7 @@ controls1 = widgetbox(esiid_textbox)
 controls2 = widgetbox(#day_slider,
 					  month_slider,
                       year_slider)
-controls3 = widgetbox(tdsp_group)
+controls3 = widgetbox(tdsp_group,exclude_approval_textbox)
 table = widgetbox(data_table)
 
 curdoc().add_root(column(table, row(controls1, controls2, controls3),savebutton))
@@ -112,5 +127,6 @@ esiid_textbox.on_change('value', lambda attr, old, new: update())
 month_slider.on_change('value', lambda attr, old, new:  update())
 year_slider.on_change('value', lambda attr, old, new:  update())
 tdsp_group.on_change('active', lambda attr, old, new:  update())
+to_be_approved.onchange('value', lambda attr, old, new: update())
 
 update()
